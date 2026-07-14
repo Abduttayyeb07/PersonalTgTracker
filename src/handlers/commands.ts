@@ -20,44 +20,39 @@ import { doLog, listWeekly, promptLog, sendWeekly } from "./weekly.js";
 
 export const commands = new Composer<BotContext>();
 
-const HELP = `<b>Personal Tracker</b> — your task & reminder assistant.
+const HELP = `🗂 <b>Personal Tracker</b>
+<i>Your task &amp; reminder assistant</i>
 
-<b>Quick add</b> (just type):
+<blockquote>⚡️ <b>Quick add</b> — just type it:
 • <code>Pay rent tomorrow 10am #personal !p1</code>
 • <code>Team standup every day 9:30am #work</code>
-• <code>Buy groceries this weekend</code>
+• <code>Buy groceries this weekend</code></blockquote>
 
-<b>Commands</b>
-/board — priority board (Critical · Important · Normal · Low)
-/add — guided add (buttons)
-/today — tasks due today
-/week — next 7 days
-/all — everything pending
-/overdue — past due
-/task_&lt;id&gt; — open a task
-/log — log this week's work
-/weekly — generate your Weekly Update
-/whoami — your profile & ID
-/menu — main menu
-/timezone — set your timezone
-/digest — set daily digest hour (default 9am)
-/help — this message
+📋 <b>Tasks</b>
+/board · /add · /today · /week · /all · /overdue
 
-<i>Tips:</i> use <code>#category</code> to file it, <code>!p1</code>..<code>!p4</code> for priority. I ping you at the reminder time and send a morning digest.
+📊 <b>Weekly report</b>
+/log · /weekly
 
-🧹 <i>Fresh each day:</i> finished and past one-off tasks clear at midnight — your recurring reminders and upcoming tasks stay.
+⚙️ <b>You</b>
+/whoami · /timezone · /digest · /menu
 
-📊 <i>Weekly Update:</i> log work all week with /log, then /weekly turns it into a polished report. Auto-sent every Sunday 11:59pm, then the week resets.`;
+<blockquote expandable>💡 <b>Tips &amp; behaviour</b>
+• <code>#category</code> files it · <code>!p1</code>–<code>!p4</code> sets priority
+• Open a task with /task_&lt;id&gt;
+• 🔔 I ping you at the reminder time and send a 🌅 morning digest
+• 🧹 Finished &amp; past one-off tasks clear at midnight — recurring reminders &amp; upcoming tasks stay
+• 📊 /weekly turns your logged work into a polished report, auto-sent every Sunday 11:59pm</blockquote>`;
 
 commands.command("start", async (ctx) => {
   const from = ctx.from!;
   await ensureUser(from.id, ctx.chat!.id, from.first_name);
   await ctx.reply(
-    `👋 Welcome to <b>Personal Tracker</b>, ${from.first_name}!\n\n` +
-      `I keep your personal & professional tasks in one place, remind you when they're due, and send a morning digest.\n\n` +
-      `🪪 Your private ID: <code>${from.id}</code>\n` +
-      `🔒 Everything you save is visible only to you.\n\n` +
-      `Just type a task like <code>Call the bank tomorrow 11am #personal</code>, or use the menu below.`,
+    `👋 <b>Welcome, ${from.first_name}!</b>\n` +
+      `<i>Personal Tracker keeps your work on track.</i>\n\n` +
+      `I hold your <b>personal</b> &amp; <b>professional</b> tasks in one place, remind you on time, and send a 🌅 morning digest.\n\n` +
+      `<blockquote>🪪 Your private ID: <code>${from.id}</code>\n🔒 Only you can ever see your data.</blockquote>\n` +
+      `Type a task like <code>Call the bank tomorrow 11am #personal</code>, or tap below 👇`,
     { parse_mode: "HTML", reply_markup: mainMenu() }
   );
   await ctx.reply(HELP, { parse_mode: "HTML" });

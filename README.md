@@ -34,15 +34,27 @@ A multi-user Telegram bot for tracking **personal & professional** tasks with re
    ```
    The bot container runs migrations on boot, then starts. Reminders keep firing as long as the container is up.
 
-## Local dev (no Docker)
+## Local dev (`npm run dev`)
+
+Easiest path — run only Postgres in Docker, the bot on your machine with hot-reload:
 
 ```bash
+# 1. Start the database (published on host port 55432 to avoid clashing
+#    with any native Postgres on 5432/5433):
+docker compose up -d postgres
+
+# 2. .env already defaults to:
+#    DATABASE_URL=postgres://tracker:tracker@localhost:55432/tracker
+
+# 3. Install and run — migrations apply automatically on boot:
 npm install
-# point DATABASE_URL at a local postgres (host=localhost)
-npm run db:generate   # create migration SQL from the schema
-npm run db:migrate    # apply it
-npm run dev           # hot-reload
+npm run dev            # tsx watch, restarts on changes
 ```
+
+You should see `Applying database migrations… → Database ready. → ✅ @yourbot is live.`
+Then message your bot `/start`.
+
+> No separate migrate step needed — the bot runs pending migrations itself at startup (`npm run db:migrate` still exists if you want to run them standalone). After changing `src/db/schema.ts`, run `npm run db:generate` to create the new migration SQL.
 
 ## Commands
 

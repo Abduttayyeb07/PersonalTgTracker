@@ -43,14 +43,16 @@ export function taskLine(task: Task, timezone: string, category?: Category): str
 }
 
 export function taskCard(task: Task, timezone: string, category?: Category): string {
-  const lines = [
-    `${priorityLabel(task.priority)}  ${category ? category.emoji + " " + escapeHtml(category.name) : ""}`,
-    `\n<b>${escapeHtml(task.title)}</b>`,
-  ];
-  if (task.notes) lines.push(`\n<i>${escapeHtml(task.notes)}</i>`);
-  lines.push(`\n📅 ${formatDue(task.dueAt, timezone)}`);
-  if (task.remindAt)
-    lines.push(`🔔 reminder: ${formatDue(task.remindAt, timezone)}`);
-  if (task.recurrence !== "none") lines.push(`🔁 ${task.recurrence}`);
-  return lines.join("\n");
+  const tag = category ? `${category.emoji} ${escapeHtml(category.name)}` : "—";
+  const inner: string[] = [`<b>${escapeHtml(task.title)}</b>`];
+  if (task.notes) inner.push(`<i>${escapeHtml(task.notes)}</i>`);
+  inner.push(""); // spacer line inside the panel
+  inner.push(`📅 ${formatDue(task.dueAt, timezone)}${isOverdue(task, timezone) ? "  ⚠️ overdue" : ""}`);
+  if (task.remindAt) inner.push(`🔔 ${formatDue(task.remindAt, timezone)}`);
+  if (task.recurrence !== "none") inner.push(`🔁 ${task.recurrence}`);
+
+  return (
+    `${priorityLabel(task.priority)}   ·   ${tag}\n` +
+    `<blockquote>${inner.join("\n")}</blockquote>`
+  );
 }

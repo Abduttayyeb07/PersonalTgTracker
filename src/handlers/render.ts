@@ -2,7 +2,7 @@ import type { BotContext } from "../types.js";
 import type { ListFilter } from "../services/store.js";
 import { boardTasks, listCategories, listTasks } from "../services/store.js";
 import type { Task, User } from "../db/schema.js";
-import { taskCard, taskLine } from "../utils/format.js";
+import { formatDue, taskCard, taskLine } from "../utils/format.js";
 import { boardMenu, taskActions } from "../keyboards.js";
 
 const FILTER_TITLE: Record<string, string> = {
@@ -29,16 +29,16 @@ export async function renderList(
       : FILTER_TITLE[filter] ?? "Tasks";
 
   if (tasks.length === 0) {
-    const body = `${title}\n\n<i>Nothing here. Add one with</i> /add <i>or just type it.</i>`;
+    const body = `${title}\n\n<blockquote>✨ Nothing here. Add one with /add or just type it.</blockquote>`;
     return edit
       ? void (await ctx.editMessageText(body, { parse_mode: "HTML" }).catch(() => {}))
       : void (await ctx.reply(body, { parse_mode: "HTML" }));
   }
 
   const lines = tasks.map(
-    (t, i) => `${i + 1}. ${taskLine(t, user.timezone, catMap.get(t.categoryId ?? -1))}  <code>#${t.id}</code>`
+    (t) => `${taskLine(t, user.timezone, catMap.get(t.categoryId ?? -1))}  <code>/task_${t.id}</code>`
   );
-  const body = `${title}  <b>(${tasks.length})</b>\n\n${lines.join("\n")}\n\n<i>Tap /task_&lt;id&gt; to open, e.g.</i> /task_${tasks[0].id}`;
+  const body = `${title}  ·  <i>${tasks.length}</i>\n\n<blockquote>${lines.join("\n")}</blockquote>`;
 
   if (edit) await ctx.editMessageText(body, { parse_mode: "HTML" }).catch(() => {});
   else await ctx.reply(body, { parse_mode: "HTML" });
@@ -63,27 +63,29 @@ export async function renderBoard(ctx: BotContext, user: User, edit = false): Pr
     (byPriority.get(p) ?? byPriority.set(p, []).get(p)!).push(t);
   }
 
-  const header = `🗂 <b>Your Board</b>  ·  ${tasks.length} open`;
+  const header = `🗂 <b>Your Board</b>  ·  <i>${tasks.length} open</i>`;
   if (tasks.length === 0) {
-    const body = `${header}\n\n<i>All clear. Add a task with</i> /add <i>or just type one.</i>`;
+    const body = `${header}\n\n<blockquote>✨ All clear. Add a task with /add or just type one.</blockquote>`;
     return edit
       ? void (await ctx.editMessageText(body, { parse_mode: "HTML", reply_markup: boardMenu() }).catch(() => {}))
       : void (await ctx.reply(body, { parse_mode: "HTML", reply_markup: boardMenu() }));
   }
 
-  const sections = BOARD_GROUPS.map((g) => {
+  // One blockquote "column" per non-empty priority group.
+  const sections = BOARD_GROUPS.flatMap((g) => {
     const items = byPriority.get(g.priority) ?? [];
-    if (items.length === 0) return `${g.label} · <i>—</i>`;
+    if (items.length === 0) return [];
     const lines = items
       .map((t) => {
         const cat = catMap.get(t.categoryId ?? -1);
-        return `   • ${cat ? cat.emoji + " " : ""}${escapeTitle(t.title)} <code>/task_${t.id}</code>`;
+        const due = t.dueAt ? ` <i>· ${formatDue(t.dueAt, user.timezone)}</i>` : "";
+        return `${cat ? cat.emoji + " " : "• "}${escapeTitle(t.title)}${due}  <code>/task_${t.id}</code>`;
       })
       .join("\n");
-    return `${g.label} · ${items.length}\n${lines}`;
+    return [`<blockquote>${g.label} · ${items.length}\n${lines}</blockquote>`];
   });
 
-  const body = `${header}\n\n${sections.join("\n\n")}`;
+  const body = `${header}\n\n${sections.join("\n")}`;
   if (edit) await ctx.editMessageText(body, { parse_mode: "HTML", reply_markup: boardMenu() }).catch(() => {});
   else await ctx.reply(body, { parse_mode: "HTML", reply_markup: boardMenu() });
 }

@@ -145,18 +145,23 @@ async function fireDigests(bot: Bot<BotContext>): Promise<void> {
     const cats = await listCategories(user.userId);
     const catMap = new Map(cats.map((c) => [c.id, c]));
 
+    const dateStr = now.toFormat("cccc, d LLLL");
     let body: string;
     if (tasks.length === 0) {
-      body = `☀️ <b>Good morning${user.name ? ", " + user.name : ""}!</b>\n\nNothing scheduled for today. Enjoy the clear runway. ✨`;
+      body =
+        `🌅 <b>Good morning${user.name ? ", " + user.name : ""}!</b>\n` +
+        `<i>${dateStr}</i>\n\n` +
+        `<blockquote>✨ Nothing scheduled today. Enjoy the clear runway.</blockquote>`;
     } else {
       const lines = tasks.map(
-        (t, i) => `${i + 1}. ${taskLine(t, user.timezone, catMap.get(t.categoryId ?? -1))}`
+        (t) => `${taskLine(t, user.timezone, catMap.get(t.categoryId ?? -1))}  <code>/task_${t.id}</code>`
       );
       body =
-        `☀️ <b>Good morning${user.name ? ", " + user.name : ""}!</b>\n` +
-        `Here's your day — <b>${tasks.length}</b> task${tasks.length > 1 ? "s" : ""}:\n\n` +
-        lines.join("\n") +
-        `\n\n<i>Open any with</i> /task_&lt;id&gt; <i>or see</i> /today.`;
+        `🌅 <b>Good morning${user.name ? ", " + user.name : ""}!</b>\n` +
+        `<i>${dateStr}</i>\n\n` +
+        `Here's your day — <b>${tasks.length}</b> task${tasks.length > 1 ? "s" : ""} 👇\n` +
+        `<blockquote>${lines.join("\n")}</blockquote>\n` +
+        `<i>Full list:</i> /today  ·  <i>board:</i> /board`;
     }
 
     try {
