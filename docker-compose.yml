@@ -7,9 +7,14 @@ services:
       POSTGRES_PASSWORD: tracker
       POSTGRES_DB: tracker
     ports:
-      # Host 55432 -> container 5432, so `npm run dev` can reach it without
-      # clashing with any native Postgres on the host (which may use 5432/5433).
-      - "55432:5432"
+      # Host 48732 -> container 5432. Deliberately a high, uncommon port so it
+      # doesn't collide with any other Postgres/pgBouncer instance already
+      # running on the server. Only needed if you want to reach the DB from
+      # outside Docker (a GUI client, `npm run db:migrate` from the host, etc.) —
+      # the bot container itself always talks to postgres over the internal
+      # Docker network on 5432, unaffected by this mapping. Remove this whole
+      # `ports:` block entirely for a tighter setup if you don't need that.
+      - "48732:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

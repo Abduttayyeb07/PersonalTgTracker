@@ -39,12 +39,12 @@ A multi-user Telegram bot for tracking **personal & professional** tasks with re
 Easiest path — run only Postgres in Docker, the bot on your machine with hot-reload:
 
 ```bash
-# 1. Start the database (published on host port 55432 to avoid clashing
-#    with any native Postgres on 5432/5433):
+# 1. Start the database (published on host port 48732 — a deliberately
+#    uncommon port so it doesn't clash with any other Postgres on the box):
 docker compose up -d postgres
 
 # 2. .env already defaults to:
-#    DATABASE_URL=postgres://tracker:tracker@localhost:55432/tracker
+#    DATABASE_URL=postgres://tracker:tracker@localhost:48732/tracker
 
 # 3. Install and run — migrations apply automatically on boot:
 npm install
