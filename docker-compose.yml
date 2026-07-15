@@ -3,22 +3,20 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: tracker
-      POSTGRES_PASSWORD: tracker
-      POSTGRES_DB: tracker
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      # Host 48732 -> container 5432. Deliberately a high, uncommon port so it
-      # doesn't collide with any other Postgres/pgBouncer instance already
-      # running on the server. Only needed if you want to reach the DB from
-      # outside Docker (a GUI client, `npm run db:migrate` from the host, etc.) —
-      # the bot container itself always talks to postgres over the internal
-      # Docker network on 5432, unaffected by this mapping. Remove this whole
-      # `ports:` block entirely for a tighter setup if you don't need that.
-      - "48732:5432"
+      # Bound to 127.0.0.1 only — reachable for local tools (GUI client,
+      # `npm run db:migrate` from the host) but NEVER from the network, no
+      # matter how the server's firewall is configured. The bot container
+      # itself always talks to postgres over the internal Docker network on
+      # 5432, unaffected by this mapping.
+      - "127.0.0.1:48732:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U tracker -d tracker"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -29,7 +27,7 @@ services:
     env_file: .env
     environment:
       # Override host so the bot reaches the postgres service inside the network.
-      DATABASE_URL: postgres://tracker:tracker@postgres:5432/tracker
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     depends_on:
       postgres:
         condition: service_healthy
