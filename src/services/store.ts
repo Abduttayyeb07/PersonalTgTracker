@@ -98,6 +98,19 @@ export async function completeTask(userId: number, id: number): Promise<void> {
   await updateTask(userId, id, { status: "done", completedAt: new Date() });
 }
 
+// Reverts a "Done" tap — used by the Undo button.
+export async function uncompleteTask(userId: number, id: number): Promise<void> {
+  await updateTask(userId, id, { status: "pending", completedAt: null });
+}
+
+// Recurring tasks already have their next occurrence scheduled the moment the
+// reminder fires (fixed-schedule model), so marking one "Done" must NOT flip
+// status to "done" — that would exclude it from dueReminders forever and
+// silently kill the series. Just record when it was last completed.
+export async function acknowledgeRecurringDone(userId: number, id: number): Promise<void> {
+  await updateTask(userId, id, { completedAt: new Date() });
+}
+
 export async function deleteTask(userId: number, id: number): Promise<void> {
   await db.delete(tasks).where(and(eq(tasks.id, id), eq(tasks.userId, userId)));
 }

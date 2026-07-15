@@ -35,14 +35,15 @@ function systemPrompt(nowLocal: string, timezone: string, categories: string[]):
     "- If the note is empty or nonsensical, still return the object using the raw text as the title.",
     "",
     "JSON shape:",
-    '{ "title": string, "dueAt": string|null, "priority": 1|2|3|4, "category": string|null, "recurrence": "none"|"daily"|"weekly"|"monthly" }',
+    '{ "title": string, "dueAt": string|null, "priority": 1|2|3|4, "category": string|null, "recurrence": "none"|"daily"|"weekly"|"monthly"|"custom", "recurrenceIntervalDays": integer|null }',
     "",
     "Field rules:",
     "- title: the action, cleaned of date phrases, #tags and priority tokens. Max 200 chars.",
-    `- dueAt: an ISO-8601 datetime WITH timezone offset for the user's zone (${timezone}), or null if no date is implied. Resolve relative dates ('tomorrow','next friday','tonight') against the current time. If a date but no time is given, use 09:00 local.`,
+    `- dueAt: an ISO-8601 datetime WITH timezone offset for the user's zone (${timezone}), or null if no date is implied. Resolve relative dates ('tomorrow','next friday','tonight') against the current time. If a date but no time is given, use 09:00 local. If the note implies recurrence but gives no explicit start time, use tomorrow at 09:00 local.`,
     "- priority: 1 highest .. 4 lowest. Default 3 unless the note signals urgency (!p1, 'urgent', 'asap' -> 1).",
     `- category: MUST be one of [${categories.map((c) => `"${c}"`).join(", ")}] or null. Pick the best fit; null if unclear.`,
-    "- recurrence: detect 'every day/week/month' etc; otherwise 'none'.",
+    "- recurrence: 'daily' for 'every day', 'weekly' for 'every week', 'monthly' for 'every month'. For any other interval like 'every 2 days', 'every 3 days', 'every N weeks', use 'custom' and set recurrenceIntervalDays to that interval in days (weeks * 7). Otherwise 'none'.",
+    "- recurrenceIntervalDays: only set (as a positive integer) when recurrence is 'custom'; otherwise null.",
     "",
     `Current datetime in the user's timezone: ${nowLocal} (${timezone}).`,
   ].join("\n");
@@ -54,6 +55,7 @@ interface RawExtraction {
   priority?: unknown;
   category?: unknown;
   recurrence?: unknown;
+  recurrenceIntervalDays?: unknown;
 }
 
 function extractJson(text: string): RawExtraction {
@@ -65,9 +67,7 @@ function extractJson(text: string): RawExtraction {
   return JSON.parse(cleaned.slice(start, end + 1));
 }
 
-export interface BedrockParsed extends ParsedInput {
-  recurrence: "none" | "daily" | "weekly" | "monthly";
-}
+export type BedrockParsed = ParsedInput;
 
 export async function parseWithBedrock(
   input: string,
@@ -110,13 +110,37 @@ export async function parseWithBedrock(
   }
 
   const rec = String(raw.recurrence ?? "none");
-  const recurrence = (["none", "daily", "weekly", "monthly"].includes(rec) ? rec : "none") as
-    | "none"
-    | "daily"
-    | "weekly"
-    | "monthly";
+  const recurrence = (
+    ["none", "daily", "weekly", "monthly", "custom"].includes(rec) ? rec : "none"
+  ) as ParsedInput["recurrence"];
 
-  return { title, dueAt, priority, categoryHint, recurrence };
+  let recurrenceIntervalDays: number | null = null;
+  if (recurrence === "custom") {
+    const n = Number(raw.recurrenceIntervalDays);
+    recurrenceIntervalDays = Number.isInteger(n) && n > 0 && n <= 365 ? n : null;
+    if (recurrenceIntervalDays === null) {
+      // Model said "custom" but gave no usable interval — don't silently mis-schedule.
+      return {
+        title,
+        dueAt,
+        priority,
+        categoryHint,
+        recurrence: "none",
+        recurrenceIntervalDays: null,
+      };
+    }
+  }
+
+  // A recurring task needs a starting point even if no time was given.
+  if (!dueAt && recurrence !== "none") {
+    dueAt = DateTime.now()
+      .setZone(timezone)
+      .plus({ days: 1 })
+      .set({ hour: 9, minute: 0, second: 0, millisecond: 0 })
+      .toJSDate();
+  }
+
+  return { title, dueAt, priority, categoryHint, recurrence, recurrenceIntervalDays };
 }
 
 // ---- Weekly Update generation ----

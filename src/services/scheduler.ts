@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import type { Bot } from "grammy";
+import { Bot, InlineKeyboard } from "grammy";
 import type { BotContext } from "../types.js";
 import { config } from "../config.js";
 import {
@@ -15,8 +15,22 @@ import {
 } from "./store.js";
 import { buildWeeklyUpdate } from "./weekly.js";
 import { nextOccurrence } from "../utils/dates.js";
-import { taskCard, taskLine } from "../utils/format.js";
+import { priorityLabel, taskCard, taskLine } from "../utils/format.js";
 import { taskActions } from "../keyboards.js";
+import type { Category, Task } from "../db/schema.js";
+
+// Same fix as the board/list views: plain "/task_id" text is not tappable in
+// Telegram, so digest messages use real buttons to open each task.
+function digestTaskButtons(tasks: Task[], catMap: Map<number, Category>): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  for (const t of tasks) {
+    const cat = catMap.get(t.categoryId ?? -1);
+    const dot = priorityLabel(t.priority).split(" ")[0];
+    const title = t.title.length > 32 ? t.title.slice(0, 31).trimEnd() + "…" : t.title;
+    kb.text(`${dot} ${cat ? cat.emoji + " " : ""}${title}`, `card:${t.id}`).row();
+  }
+  return kb;
+}
 
 // Starts a single interval loop that fires due reminders and morning digests.
 export function startScheduler(bot: Bot<BotContext>): void {
@@ -57,7 +71,7 @@ async function fireReminders(bot: Bot<BotContext>): Promise<void> {
 
     // Recurring: reschedule to next occurrence; one-off: mark sent.
     if (task.recurrence !== "none" && task.remindAt) {
-      const next = nextOccurrence(task.remindAt, task.recurrence);
+      const next = nextOccurrence(task.remindAt, task.recurrence, task.recurrenceIntervalDays);
       await updateTask(task.userId, task.id, {
         remindAt: next,
         dueAt: next,
@@ -116,7 +130,7 @@ async function runWeeklyReset(bot: Bot<BotContext>): Promise<void> {
         const body =
           "🗓 <b>Your Weekly Update is ready</b>\n\n" +
           escapeHtmlBlock(text) +
-          "\n\n———\n<i>A new week has started — this update's log has been cleared. Reply or use</i> /log <i>to begin logging.</i>";
+          "\n\n<i>A new week has started. This update's log has been cleared. Use</i> /log <i>to begin logging again.</i>";
         await bot.api.sendMessage(user.chatId, body, { parse_mode: "HTML" });
         await clearWeekEntries(user.userId, keyToClose);
       }
@@ -147,25 +161,25 @@ async function fireDigests(bot: Bot<BotContext>): Promise<void> {
 
     const dateStr = now.toFormat("cccc, d LLLL");
     let body: string;
+    let kb: InlineKeyboard | undefined;
     if (tasks.length === 0) {
       body =
         `🌅 <b>Good morning${user.name ? ", " + user.name : ""}!</b>\n` +
         `<i>${dateStr}</i>\n\n` +
         `<blockquote>✨ Nothing scheduled today. Enjoy the clear runway.</blockquote>`;
     } else {
-      const lines = tasks.map(
-        (t) => `${taskLine(t, user.timezone, catMap.get(t.categoryId ?? -1))}  <code>/task_${t.id}</code>`
-      );
+      const lines = tasks.map((t) => taskLine(t, user.timezone, catMap.get(t.categoryId ?? -1)));
       body =
         `🌅 <b>Good morning${user.name ? ", " + user.name : ""}!</b>\n` +
         `<i>${dateStr}</i>\n\n` +
-        `Here's your day — <b>${tasks.length}</b> task${tasks.length > 1 ? "s" : ""} 👇\n` +
+        `Here's your day: <b>${tasks.length}</b> task${tasks.length > 1 ? "s" : ""} 👇\n` +
         `<blockquote>${lines.join("\n")}</blockquote>\n` +
-        `<i>Full list:</i> /today  ·  <i>board:</i> /board`;
+        `<i>Tap a task to open it, or see /today · /board</i>`;
+      kb = digestTaskButtons(tasks, catMap);
     }
 
     try {
-      await bot.api.sendMessage(user.chatId, body, { parse_mode: "HTML" });
+      await bot.api.sendMessage(user.chatId, body, { parse_mode: "HTML", reply_markup: kb });
       await updateUser(user.userId, { lastDigestDate: today });
     } catch (err) {
       console.error(`Failed to send digest to ${user.userId}:`, err);

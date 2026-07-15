@@ -15,6 +15,13 @@
       "when": 1784046995780,
       "tag": "0001_rapid_warbound",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784121671079,
+      "tag": "0002_black_hannibal_king",
+      "breakpoints": true
     }
   ]
 }

@@ -41,8 +41,13 @@ export function resolveSnooze(token: string, timezone: string): Date | null {
   }
 }
 
-// Advance a recurring task to its next occurrence.
-export function nextOccurrence(from: Date, recurrence: string): Date | null {
+// Advance a recurring task to its next occurrence. `intervalDays` is only
+// used (and required) when recurrence is "custom" (repeat every N days).
+export function nextOccurrence(
+  from: Date,
+  recurrence: string,
+  intervalDays?: number | null
+): Date | null {
   const dt = DateTime.fromJSDate(from);
   switch (recurrence) {
     case "daily":
@@ -51,6 +56,8 @@ export function nextOccurrence(from: Date, recurrence: string): Date | null {
       return dt.plus({ weeks: 1 }).toJSDate();
     case "monthly":
       return dt.plus({ months: 1 }).toJSDate();
+    case "custom":
+      return intervalDays && intervalDays > 0 ? dt.plus({ days: intervalDays }).toJSDate() : null;
     default:
       return null;
   }

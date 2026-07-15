@@ -13,7 +13,8 @@ import {
 
 // ---- Enums ----
 export const taskStatus = pgEnum("task_status", ["pending", "done", "snoozed", "cancelled"]);
-export const recurrence = pgEnum("recurrence", ["none", "daily", "weekly", "monthly"]);
+// "custom" means "every N days" — N is stored in tasks.recurrenceIntervalDays.
+export const recurrence = pgEnum("recurrence", ["none", "daily", "weekly", "monthly", "custom"]);
 
 // ---- Users ----
 // One row per Telegram user. Multi-user isolation is enforced by user_id everywhere.
@@ -66,6 +67,8 @@ export const tasks = pgTable(
     priority: integer("priority").notNull().default(3), // 1 (highest) .. 4 (lowest)
     status: taskStatus("status").notNull().default("pending"),
     recurrence: recurrence("recurrence").notNull().default("none"),
+    // Only set when recurrence = "custom": repeat every N days.
+    recurrenceIntervalDays: integer("recurrence_interval_days"),
     // Reminder bookkeeping
     remindAt: timestamp("remind_at", { withTimezone: true }), // when to ping; null = digest only
     reminderSent: boolean("reminder_sent").notNull().default(false),

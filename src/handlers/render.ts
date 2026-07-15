@@ -1,9 +1,37 @@
+import { InlineKeyboard } from "grammy";
 import type { BotContext } from "../types.js";
 import type { ListFilter } from "../services/store.js";
-import { boardTasks, listCategories, listTasks } from "../services/store.js";
-import type { Task, User } from "../db/schema.js";
-import { formatDue, taskCard, taskLine } from "../utils/format.js";
-import { boardMenu, taskActions } from "../keyboards.js";
+import {
+  acknowledgeRecurringDone,
+  boardTasks,
+  completeTask,
+  getTask,
+  listCategories,
+  listTasks,
+  uncompleteTask,
+} from "../services/store.js";
+import type { Category, Task, User } from "../db/schema.js";
+import { formatDue, priorityLabel, taskCard, taskLine } from "../utils/format.js";
+import { backRow, boardMenu, taskActions } from "../keyboards.js";
+
+// Buttons that reliably open each task's card — plain "/task_id" text inside
+// <code>/<blockquote> formatting is NOT tappable in Telegram, so we use real
+// inline buttons instead. One row per task, truncated title with priority + category.
+function openTaskButtons(tasks: Task[], catMap: Map<number, Category>, footer?: InlineKeyboard): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  for (const t of tasks) {
+    const cat = catMap.get(t.categoryId ?? -1);
+    const dot = priorityLabel(t.priority).split(" ")[0];
+    const label = `${dot} ${cat ? cat.emoji + " " : ""}${truncate(t.title, 32)}`;
+    kb.text(label, `card:${t.id}`).row();
+  }
+  if (footer) kb.append(footer);
+  return kb;
+}
+
+function truncate(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max - 1).trimEnd() + "…" : s;
+}
 
 const FILTER_TITLE: Record<string, string> = {
   today: "📋 Today",
@@ -12,12 +40,14 @@ const FILTER_TITLE: Record<string, string> = {
   overdue: "⚠️ Overdue",
 };
 
-// Render a list of tasks as a single message (with per-task numbers for quick reference).
+// Render a list of tasks as a single message. `backTo` is the callback for the
+// up-one-level button (category lists go back to the categories menu; others to menu).
 export async function renderList(
   ctx: BotContext,
   user: User,
   filter: ListFilter,
-  edit = false
+  edit = false,
+  backTo = "menu"
 ): Promise<void> {
   const cats = await listCategories(user.userId);
   const catMap = new Map(cats.map((c) => [c.id, c]));
@@ -30,18 +60,18 @@ export async function renderList(
 
   if (tasks.length === 0) {
     const body = `${title}\n\n<blockquote>✨ Nothing here. Add one with /add or just type it.</blockquote>`;
+    const kb = backRow(backTo);
     return edit
-      ? void (await ctx.editMessageText(body, { parse_mode: "HTML" }).catch(() => {}))
-      : void (await ctx.reply(body, { parse_mode: "HTML" }));
+      ? void (await ctx.editMessageText(body, { parse_mode: "HTML", reply_markup: kb }).catch(() => {}))
+      : void (await ctx.reply(body, { parse_mode: "HTML", reply_markup: kb }));
   }
 
-  const lines = tasks.map(
-    (t) => `${taskLine(t, user.timezone, catMap.get(t.categoryId ?? -1))}  <code>/task_${t.id}</code>`
-  );
-  const body = `${title}  ·  <i>${tasks.length}</i>\n\n<blockquote>${lines.join("\n")}</blockquote>`;
+  const lines = tasks.map((t) => taskLine(t, user.timezone, catMap.get(t.categoryId ?? -1)));
+  const body = `${title}  ·  <i>${tasks.length}</i>\n\n<blockquote>${lines.join("\n")}</blockquote>\n<i>Tap a task below to open it 👇</i>`;
+  const kb = openTaskButtons(tasks, catMap, backRow(backTo));
 
-  if (edit) await ctx.editMessageText(body, { parse_mode: "HTML" }).catch(() => {});
-  else await ctx.reply(body, { parse_mode: "HTML" });
+  if (edit) await ctx.editMessageText(body, { parse_mode: "HTML", reply_markup: kb }).catch(() => {});
+  else await ctx.reply(body, { parse_mode: "HTML", reply_markup: kb });
 }
 
 // Priority "board": tasks grouped into Critical / Important / Normal / Low columns.
@@ -79,15 +109,16 @@ export async function renderBoard(ctx: BotContext, user: User, edit = false): Pr
       .map((t) => {
         const cat = catMap.get(t.categoryId ?? -1);
         const due = t.dueAt ? ` <i>· ${formatDue(t.dueAt, user.timezone)}</i>` : "";
-        return `${cat ? cat.emoji + " " : "• "}${escapeTitle(t.title)}${due}  <code>/task_${t.id}</code>`;
+        return `${cat ? cat.emoji + " " : "• "}${escapeTitle(t.title)}${due}`;
       })
       .join("\n");
     return [`<blockquote>${g.label} · ${items.length}\n${lines}</blockquote>`];
   });
 
-  const body = `${header}\n\n${sections.join("\n")}`;
-  if (edit) await ctx.editMessageText(body, { parse_mode: "HTML", reply_markup: boardMenu() }).catch(() => {});
-  else await ctx.reply(body, { parse_mode: "HTML", reply_markup: boardMenu() });
+  const body = `${header}\n\n${sections.join("\n")}\n<i>Tap a task below to open it 👇</i>`;
+  const kb = openTaskButtons(tasks, catMap, boardMenu());
+  if (edit) await ctx.editMessageText(body, { parse_mode: "HTML", reply_markup: kb }).catch(() => {});
+  else await ctx.reply(body, { parse_mode: "HTML", reply_markup: kb });
 }
 
 function escapeTitle(s: string): string {
@@ -114,4 +145,45 @@ export async function renderCard(
   const kb = taskActions(task.id);
   if (edit) await ctx.editMessageText(body, { parse_mode: "HTML", reply_markup: kb }).catch(() => {});
   else await ctx.reply(body, { parse_mode: "HTML", reply_markup: kb });
+}
+
+// Shared "mark done" handler used by both the ✅ Done button and natural-language
+// completion ("mark rent done"). Recurring tasks keep status "pending" so they
+// keep firing on schedule — only their completedAt is recorded.
+export async function handleMarkDone(
+  ctx: BotContext,
+  user: User,
+  taskId: number,
+  edit: boolean
+): Promise<void> {
+  const task = await getTask(user.userId, taskId);
+  if (!task) {
+    const msg = "Task not found (maybe it was already deleted).";
+    if (edit) await ctx.editMessageText(msg).catch(() => {});
+    else await ctx.reply(msg);
+    return;
+  }
+
+  const isRecurring = task.recurrence !== "none";
+  if (isRecurring) await acknowledgeRecurringDone(user.userId, taskId);
+  else await completeTask(user.userId, taskId);
+
+  const kb = new InlineKeyboard().text("↩️ Undo", `undone:${taskId}`).text("🏠 Home", "menu:back");
+  const body = isRecurring
+    ? "✅ <b>Nice work!</b> This will keep reminding you on schedule."
+    : "✅ <b>Done!</b> Nice work.";
+
+  if (edit) {
+    await ctx.editMessageText(body, { parse_mode: "HTML", reply_markup: kb }).catch(async () => {
+      await ctx.reply(body, { parse_mode: "HTML", reply_markup: kb });
+    });
+  } else {
+    await ctx.reply(body, { parse_mode: "HTML", reply_markup: kb });
+  }
+}
+
+// Reverts a "Done" tap (works for both the one-off and recurring cases above).
+export async function handleUndoDone(ctx: BotContext, user: User, taskId: number): Promise<void> {
+  await uncompleteTask(user.userId, taskId);
+  await renderCard(ctx, user, taskId, true);
 }

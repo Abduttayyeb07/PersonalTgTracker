@@ -42,14 +42,22 @@ export function taskLine(task: Task, timezone: string, category?: Category): str
   return `${priorityLabel(task.priority).split(" ")[0]} ${cat}<b>${escapeHtml(task.title)}</b>${due}${overdue}${bell}`;
 }
 
+export function recurrenceLabel(task: Task): string {
+  if (task.recurrence === "custom") {
+    const n = task.recurrenceIntervalDays ?? 0;
+    return n > 0 ? `every ${n} day${n > 1 ? "s" : ""}` : "custom";
+  }
+  return task.recurrence;
+}
+
 export function taskCard(task: Task, timezone: string, category?: Category): string {
-  const tag = category ? `${category.emoji} ${escapeHtml(category.name)}` : "—";
+  const tag = category ? `${category.emoji} ${escapeHtml(category.name)}` : "Uncategorized";
   const inner: string[] = [`<b>${escapeHtml(task.title)}</b>`];
   if (task.notes) inner.push(`<i>${escapeHtml(task.notes)}</i>`);
   inner.push(""); // spacer line inside the panel
   inner.push(`📅 ${formatDue(task.dueAt, timezone)}${isOverdue(task, timezone) ? "  ⚠️ overdue" : ""}`);
   if (task.remindAt) inner.push(`🔔 ${formatDue(task.remindAt, timezone)}`);
-  if (task.recurrence !== "none") inner.push(`🔁 ${task.recurrence}`);
+  if (task.recurrence !== "none") inner.push(`🔁 ${recurrenceLabel(task)}`);
 
   return (
     `${priorityLabel(task.priority)}   ·   ${tag}\n` +

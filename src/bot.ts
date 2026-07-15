@@ -24,8 +24,10 @@ export function createBot(): Bot<BotContext> {
 // Registers the slash-command menu shown in Telegram's UI.
 export async function setCommands(bot: Bot<BotContext>): Promise<void> {
   await bot.api.setMyCommands([
+    { command: "start", description: "Welcome & main menu" },
     { command: "board", description: "Priority board" },
     { command: "add", description: "Add a task (guided)" },
+    { command: "cancel", description: "Cancel guided add / a pending prompt" },
     { command: "today", description: "Tasks due today" },
     { command: "week", description: "Next 7 days" },
     { command: "all", description: "All pending tasks" },

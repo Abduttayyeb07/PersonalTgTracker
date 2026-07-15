@@ -1,30 +1,35 @@
 import { Composer, InlineKeyboard } from "grammy";
 import type { BotContext } from "../types.js";
 import {
-  completeTask,
   deleteTask,
   ensureUser,
   getTask,
   getUser,
   listCategories,
   updateTask,
+  updateUser,
 } from "../services/store.js";
-import { renderBoard, renderCard, renderList } from "./render.js";
+import { handleMarkDone, handleUndoDone, renderBoard, renderCard, renderList } from "./render.js";
 import {
   categoryPicker,
   datePicker,
+  deleteConfirm,
+  homeRow,
   mainMenu,
   priorityPicker,
   snoozeOptions,
 } from "../keyboards.js";
 import { resolveQuickDate, resolveSnooze } from "../utils/dates.js";
 import {
+  cancelAddFlow,
   flowPickCategory,
   flowPickDate,
   flowPickPriority,
+  flowPickRepeat,
   startAddFlow,
 } from "./addFlow.js";
 import { approveWeekly, listWeekly, promptLog, sendWeekly } from "./weekly.js";
+import { HELP, welcomeText } from "./commands.js";
 
 export const callbacks = new Composer<BotContext>();
 
@@ -44,7 +49,12 @@ callbacks.on("callback_query:data", async (ctx) => {
         await renderBoard(ctx, user, true);
         break;
       case "menu":
-        await ctx.editMessageText("What would you like to do?", { reply_markup: mainMenu() });
+        await ctx
+          .editMessageText(welcomeText(user.name, user.userId), {
+            parse_mode: "HTML",
+            reply_markup: mainMenu(),
+          })
+          .catch(() => {});
         break;
       case "card":
         await renderCard(ctx, user, Number(rest[0]), true);
@@ -52,13 +62,21 @@ callbacks.on("callback_query:data", async (ctx) => {
 
       // ----- Task actions -----
       case "done": {
-        await completeTask(user.userId, Number(rest[0]));
-        await ctx.editMessageText("✅ <b>Done!</b> Nice work.", { parse_mode: "HTML" });
+        await handleMarkDone(ctx, user, Number(rest[0]), true);
+        break;
+      }
+      case "undone": {
+        await handleUndoDone(ctx, user, Number(rest[0]));
         break;
       }
       case "del": {
+        const id = Number(rest[0]);
+        await ctx.editMessageReplyMarkup({ reply_markup: deleteConfirm(id) });
+        break;
+      }
+      case "delok": {
         await deleteTask(user.userId, Number(rest[0]));
-        await ctx.editMessageText("🗑 Deleted.");
+        await ctx.editMessageText("🗑 Deleted.", { reply_markup: homeRow() });
         break;
       }
       case "snooze":
@@ -102,7 +120,8 @@ callbacks.on("callback_query:data", async (ctx) => {
       }
       case "ecat": {
         const cats = await listCategories(user.userId);
-        await ctx.editMessageReplyMarkup({ reply_markup: categoryPicker(cats, `ecatset:${rest[0]}`) });
+        const kb = categoryPicker(cats, `ecatset:${rest[0]}`).row().text("« Back", `edit:${rest[0]}`);
+        await ctx.editMessageReplyMarkup({ reply_markup: kb });
         break;
       }
       case "ecatset": {
@@ -111,7 +130,8 @@ callbacks.on("callback_query:data", async (ctx) => {
         break;
       }
       case "epri": {
-        await ctx.editMessageReplyMarkup({ reply_markup: priorityPicker(`epriset:${rest[0]}`) });
+        const kb = priorityPicker(`epriset:${rest[0]}`).row().text("« Back", `edit:${rest[0]}`);
+        await ctx.editMessageReplyMarkup({ reply_markup: kb });
         break;
       }
       case "epriset": {
@@ -120,7 +140,8 @@ callbacks.on("callback_query:data", async (ctx) => {
         break;
       }
       case "edate": {
-        await ctx.editMessageReplyMarkup({ reply_markup: datePicker(`edateset:${rest[0]}`) });
+        const kb = datePicker(`edateset:${rest[0]}`).row().text("« Back", `edit:${rest[0]}`);
+        await ctx.editMessageReplyMarkup({ reply_markup: kb });
         break;
       }
       case "edateset": {
@@ -136,14 +157,35 @@ callbacks.on("callback_query:data", async (ctx) => {
           .text("None", `erepset:${id}:none`)
           .text("Daily", `erepset:${id}:daily`)
           .row()
+          .text("Every 2 days", `erepset:${id}:custom:2`)
+          .text("Every 3 days", `erepset:${id}:custom:3`)
+          .row()
           .text("Weekly", `erepset:${id}:weekly`)
-          .text("Monthly", `erepset:${id}:monthly`);
+          .text("Monthly", `erepset:${id}:monthly`)
+          .row()
+          .text("⌨️ Custom interval", `erepcustom:${id}`)
+          .row()
+          .text("« Back", `edit:${id}`);
         await ctx.editMessageReplyMarkup({ reply_markup: kb });
         break;
       }
       case "erepset": {
-        await updateTask(user.userId, Number(rest[0]), { recurrence: rest[1] as any });
-        await renderCard(ctx, user, Number(rest[0]), true);
+        const id = Number(rest[0]);
+        const recurrence = rest[1];
+        const intervalDays = recurrence === "custom" ? Number(rest[2]) : null;
+        await updateTask(user.userId, id, {
+          recurrence: recurrence as any,
+          recurrenceIntervalDays: intervalDays,
+        });
+        await renderCard(ctx, user, id, true);
+        break;
+      }
+      case "erepcustom": {
+        ctx.session.awaiting = "recurrence_days";
+        ctx.session.editTaskId = Number(rest[0]);
+        await ctx.reply("🔁 Repeat every how many days? Send a number, e.g. <code>5</code>.", {
+          parse_mode: "HTML",
+        });
         break;
       }
 
@@ -155,7 +197,7 @@ callbacks.on("callback_query:data", async (ctx) => {
           kb.text(`${c.emoji} ${c.name}`, `catlist:${c.id}`);
           if (i % 2 === 1) kb.row();
         });
-        kb.row().text("« Menu", "menu:back");
+        kb.row().text("« Back", "menu:back");
         await ctx.editMessageText("📂 <b>Your categories</b>\nTap one to see its tasks.", {
           parse_mode: "HTML",
           reply_markup: kb,
@@ -163,7 +205,7 @@ callbacks.on("callback_query:data", async (ctx) => {
         break;
       }
       case "catlist":
-        await renderList(ctx, user, { categoryId: Number(rest[0]) }, true);
+        await renderList(ctx, user, { categoryId: Number(rest[0]) }, true, "cats");
         break;
 
       // ----- Add flow -----
@@ -179,6 +221,12 @@ callbacks.on("callback_query:data", async (ctx) => {
       case "aflow_pri":
         await flowPickPriority(ctx, user, Number(rest[0]));
         break;
+      case "aflow_rep":
+        await flowPickRepeat(ctx, user, rest);
+        break;
+      case "aflow_cancel":
+        await cancelAddFlow(ctx, true);
+        break;
 
       // ----- Weekly update -----
       case "wk": {
@@ -193,6 +241,30 @@ callbacks.on("callback_query:data", async (ctx) => {
         break;
       }
 
+      // ----- Timezone quick-pick -----
+      case "tz": {
+        const zone = rest.join(":"); // rejoin in case an IANA name contained ":"
+        ctx.session.awaiting = undefined;
+        const { resolveTimezone, localTimeIn } = await import("../utils/timezone.js");
+        const resolved = resolveTimezone(zone) ?? zone;
+        await updateUser(user.userId, { timezone: resolved });
+        await ctx.editMessageText(
+          `✅ Timezone set to <b>${resolved}</b>.\nIt's now <b>${localTimeIn(resolved)}</b> for you. Reminders and digest follow this.`,
+          { parse_mode: "HTML" }
+        );
+        break;
+      }
+
+      // ----- Help -----
+      case "help": {
+        const kb = new InlineKeyboard().text("« Back", "menu:back");
+        await ctx.editMessageText(HELP, { parse_mode: "HTML", reply_markup: kb }).catch(async () => {
+          // HELP may exceed editMessageText's diff-detection in rare cases; fall back to a fresh message.
+          await ctx.reply(HELP, { parse_mode: "HTML", reply_markup: kb });
+        });
+        break;
+      }
+
       // ----- Settings -----
       case "settings": {
         const kb = new InlineKeyboard()
@@ -200,7 +272,7 @@ callbacks.on("callback_query:data", async (ctx) => {
           .row()
           .text(`🌍 TZ: ${user.timezone}`, "noop")
           .row()
-          .text("« Menu", "menu:back");
+          .text("« Back", "menu:back");
         await ctx.editMessageText(
           "⚙️ <b>Settings</b>\nUse /timezone and /digest to change these.",
           { parse_mode: "HTML", reply_markup: kb }
