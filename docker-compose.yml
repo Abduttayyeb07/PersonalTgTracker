@@ -34,3 +34,16 @@ services:
 
 volumes:
   pgdata:
+
+networks:
+  default:
+    # An explicit subnet bypasses Docker's auto address-pool allocator
+    # entirely — needed on servers with many existing networks, where that
+    # pool (Docker's default 172.16.0.0/12) is often fully exhausted
+    # ("all predefined address pools have been fully subnetted"). Using the
+    # 10.x.x.x range instead, since that's rarely touched by Docker defaults.
+    # If this still collides with something on your server, run
+    # `docker network ls` + `docker network inspect <name>` to find a free /24.
+    ipam:
+      config:
+        - subnet: 10.89.14.0/24
