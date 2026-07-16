@@ -7,16 +7,19 @@ import {
   cleanupUserDay,
   clearWeekEntries,
   dueReminders,
+  dueTopicWatches,
   listCategories,
   listWeekEntries,
+  markTopicWatchSent,
   tasksDueToday,
   updateTask,
   updateUser,
 } from "./store.js";
 import { buildWeeklyUpdate } from "./weekly.js";
+import { buildTopicDigest } from "./watchDigest.js";
 import { nextOccurrence } from "../utils/dates.js";
 import { priorityLabel, taskCard, taskLine } from "../utils/format.js";
-import { taskActions } from "../keyboards.js";
+import { taskActions, watchItemActions } from "../keyboards.js";
 import type { Category, Task } from "../db/schema.js";
 
 // Same fix as the board/list views: plain "/task_id" text is not tappable in
@@ -41,6 +44,7 @@ export function startScheduler(bot: Bot<BotContext>): void {
       await fireDigests(bot);
       await runDailyCleanup();
       await runWeeklyReset(bot);
+      await runTopicWatches(bot);
     } catch (err) {
       console.error("Scheduler tick error:", err);
     }
@@ -183,6 +187,30 @@ async function fireDigests(bot: Bot<BotContext>): Promise<void> {
       await updateUser(user.userId, { lastDigestDate: today });
     } catch (err) {
       console.error(`Failed to send digest to ${user.userId}:`, err);
+    }
+  }
+}
+
+// "What's new" digests for /watch topics — fixed cadence (config.watchIntervalDays),
+// never sent by local calendar day, just N days since the last send (or since
+// creation, for a brand-new subscription — those fire on the very next tick).
+async function runTopicWatches(bot: Bot<BotContext>): Promise<void> {
+  const cutoff = new Date(Date.now() - config.watchIntervalDays * 24 * 60 * 60 * 1000);
+  const due = await dueTopicWatches(cutoff);
+  if (due.length === 0) return;
+
+  const users = await allUsers();
+  for (const watch of due) {
+    const user = users.find((u) => u.userId === watch.userId);
+    if (!user) continue;
+
+    try {
+      const digest = await buildTopicDigest(watch.topic);
+      if (digest === null) continue; // search not configured yet — retry next tick, don't mark sent
+      await bot.api.sendMessage(user.chatId, digest, { reply_markup: watchItemActions(watch.id) });
+      await markTopicWatchSent(watch.id);
+    } catch (err) {
+      console.error(`Topic watch failed for "${watch.topic}" (user ${watch.userId}):`, err);
     }
   }
 }

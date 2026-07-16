@@ -23,7 +23,7 @@ export interface SessionData {
     draft: AddDraft;
   };
   // For settings prompts (timezone / digest hour) awaiting a free-text reply.
-  awaiting?: "timezone" | "digest_hour" | "edit_title" | "week_log" | "recurrence_days";
+  awaiting?: "timezone" | "digest_hour" | "edit_title" | "week_log" | "recurrence_days" | "watch_topic";
   editTaskId?: number;
 }
 

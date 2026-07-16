@@ -38,6 +38,15 @@ import {
   startAddFlow,
 } from "./addFlow.js";
 import { approveWeekly, listWeekly, promptLog, sendWeekly } from "./weekly.js";
+import {
+  addWatch,
+  checkWatchNow,
+  listWatches,
+  promptCustomTopic,
+  promptWatch,
+  removeWatch,
+  viewWatch,
+} from "./watch.js";
 import { HELP, welcomeText } from "./commands.js";
 
 export const callbacks = new Composer<BotContext>();
@@ -68,6 +77,17 @@ callbacks.on("callback_query:data", async (ctx) => {
         } else {
           await renderTotal(ctx, user, true);
         }
+        break;
+      }
+      case "watch": {
+        const sub = rest[0];
+        if (sub === "list") await listWatches(ctx, user, true);
+        else if (sub === "add" && rest.length === 1) await promptWatch(ctx, true);
+        else if (sub === "add") await addWatch(ctx, user, rest[1] ?? "");
+        else if (sub === "custom") await promptCustomTopic(ctx);
+        else if (sub === "open") await viewWatch(ctx, user, Number(rest[1]));
+        else if (sub === "check") await checkWatchNow(ctx, user, Number(rest[1]));
+        else if (sub === "del") await removeWatch(ctx, user, Number(rest[1]));
         break;
       }
       case "menu":

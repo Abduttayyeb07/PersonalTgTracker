@@ -19,4 +19,10 @@ export const config = {
     endpointUrl: process.env.AWS_BEDROCK_ENDPOINT_URL || undefined,
     // Credentials are read by the AWS SDK from AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY.
   },
+  tavily: {
+    apiKey: process.env.TAVILY_API_KEY || "",
+    enabled: Boolean(process.env.TAVILY_API_KEY),
+  },
+  // Fixed cadence for topic watches ("what's new in X" auto-digests).
+  watchIntervalDays: Number(process.env.WATCH_INTERVAL_DAYS ?? 7),
 };

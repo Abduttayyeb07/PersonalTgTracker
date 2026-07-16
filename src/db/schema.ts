@@ -100,8 +100,30 @@ export const weekEntries = pgTable(
   })
 );
 
+// ---- Topic watches ----
+// A user-picked topic (any free text: "AI", "crypto", "terrorism", ...) that
+// gets an automatic "what's new" digest every few days via web search + AI
+// summary. Interval is fixed app-wide (see WATCH_INTERVAL_DAYS in the
+// scheduler) rather than per-topic.
+export const topicWatches = pgTable(
+  "topic_watches",
+  {
+    id: serial("id").primaryKey(),
+    userId: bigint("user_id", { mode: "number" })
+      .notNull()
+      .references(() => users.userId, { onDelete: "cascade" }),
+    topic: text("topic").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSentAt: timestamp("last_sent_at", { withTimezone: true }), // null = never sent yet
+  },
+  (t) => ({
+    byUser: index("topic_watches_user_idx").on(t.userId),
+  })
+);
+
 export type User = typeof users.$inferSelect;
 export type WeekEntry = typeof weekEntries.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;
+export type TopicWatch = typeof topicWatches.$inferSelect;

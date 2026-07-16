@@ -35,6 +35,8 @@ export async function setCommands(bot: Bot<BotContext>): Promise<void> {
     { command: "overdue", description: "Overdue tasks" },
     { command: "log", description: "Log weekly work" },
     { command: "weekly", description: "Generate Weekly Update" },
+    { command: "watch", description: "Watch a topic for what's new" },
+    { command: "topics", description: "Manage your topic watches" },
     { command: "whoami", description: "Your profile & ID" },
     { command: "menu", description: "Main menu" },
     { command: "timezone", description: "Set your timezone" },

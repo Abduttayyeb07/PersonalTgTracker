@@ -132,9 +132,34 @@ export function mainMenu(): InlineKeyboard {
     .text("📝 Weekly", "wk:list")
     .row()
     .text("📊 Total", "total:open")
-    .text("⚙️ Settings", "settings:open")
+    .text("🔎 Watch", "watch:list")
     .row()
+    .text("⚙️ Settings", "settings:open")
     .text("❓ Help", "help:open");
+}
+
+// Recommended topics for /watch, plus a custom option.
+const RECOMMENDED_TOPICS = ["AI", "Crypto", "Tech News", "World News", "Business", "Sports"];
+
+export function watchTopicPicker(): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  RECOMMENDED_TOPICS.forEach((topic, i) => {
+    kb.text(topic, `watch:add:${topic}`);
+    if (i % 2 === 1) kb.row();
+  });
+  if (RECOMMENDED_TOPICS.length % 2 === 1) kb.row();
+  kb.text("✏️ Custom topic", "watch:custom").row();
+  kb.text("« Back", "menu:back");
+  return kb;
+}
+
+// Buttons under one subscribed topic.
+export function watchItemActions(id: number): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("🔄 Check now", `watch:check:${id}`)
+    .text("🗑 Stop watching", `watch:del:${id}`)
+    .row()
+    .text("« Back", "watch:list");
 }
 
 // Navigation under the priority board.

@@ -1,8 +1,8 @@
 import { and, asc, desc, eq, gte, isNull, lt, lte, or, ne, sql } from "drizzle-orm";
 import { DateTime } from "luxon";
 import { db } from "../db/index.js";
-import { users, categories, tasks, weekEntries } from "../db/schema.js";
-import type { Category, NewTask, Task, User, WeekEntry } from "../db/schema.js";
+import { users, categories, tasks, weekEntries, topicWatches } from "../db/schema.js";
+import type { Category, NewTask, Task, TopicWatch, User, WeekEntry } from "../db/schema.js";
 import { config } from "../config.js";
 
 // ---- Users ----
@@ -277,4 +277,39 @@ export async function cleanupUserDay(user: User): Promise<number> {
     )
     .returning({ id: tasks.id });
   return res.length;
+}
+
+// ---- Topic watches (recurring "what's new" digests) ----
+export async function addTopicWatch(userId: number, topic: string): Promise<TopicWatch> {
+  const [created] = await db.insert(topicWatches).values({ userId, topic }).returning();
+  return created;
+}
+
+export async function listTopicWatches(userId: number): Promise<TopicWatch[]> {
+  return db.query.topicWatches.findMany({
+    where: eq(topicWatches.userId, userId),
+    orderBy: asc(topicWatches.createdAt),
+  });
+}
+
+export async function deleteTopicWatch(userId: number, id: number): Promise<void> {
+  await db.delete(topicWatches).where(and(eq(topicWatches.id, id), eq(topicWatches.userId, userId)));
+}
+
+export async function getTopicWatch(userId: number, id: number): Promise<TopicWatch | undefined> {
+  return db.query.topicWatches.findFirst({
+    where: and(eq(topicWatches.id, id), eq(topicWatches.userId, userId)),
+  });
+}
+
+export async function markTopicWatchSent(id: number): Promise<void> {
+  await db.update(topicWatches).set({ lastSentAt: new Date() }).where(eq(topicWatches.id, id));
+}
+
+// All watches never sent, or last sent at/before the given cutoff instant —
+// i.e. due for their next "what's new" digest.
+export async function dueTopicWatches(cutoff: Date): Promise<TopicWatch[]> {
+  return db.query.topicWatches.findMany({
+    where: or(isNull(topicWatches.lastSentAt), lte(topicWatches.lastSentAt, cutoff)),
+  });
 }

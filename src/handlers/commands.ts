@@ -21,6 +21,7 @@ import { updateTask } from "../services/store.js";
 import { config } from "../config.js";
 import { isChitChat } from "../utils/chitchat.js";
 import { doLog, listWeekly, promptLog, sendWeekly } from "./weekly.js";
+import { addWatch, listWatches, promptWatch } from "./watch.js";
 
 export const commands = new Composer<BotContext>();
 
@@ -120,6 +121,19 @@ commands.command("log", async (ctx) => {
   const arg = ctx.match?.toString().trim();
   if (arg) return doLog(ctx, user, arg);
   return promptLog(ctx);
+});
+
+// /watch [topic] — subscribe to a "what's new" digest for any topic.
+commands.command("watch", async (ctx) => {
+  const user = await ensureUser(ctx.from!.id, ctx.chat!.id, ctx.from!.first_name);
+  const arg = ctx.match?.toString().trim();
+  if (arg) return addWatch(ctx, user, arg);
+  return promptWatch(ctx);
+});
+
+commands.command("topics", async (ctx) => {
+  const user = await ensureUser(ctx.from!.id, ctx.chat!.id, ctx.from!.first_name);
+  await listWatches(ctx, user);
 });
 
 commands.command("weekly", async (ctx) => {
@@ -229,6 +243,10 @@ commands.on("message:text", async (ctx) => {
     }
     await updateTask(user.userId, id, { recurrence: "custom", recurrenceIntervalDays: n });
     return renderCard(ctx, user, id);
+  }
+  if (ctx.session.awaiting === "watch_topic") {
+    ctx.session.awaiting = undefined;
+    return addWatch(ctx, user, text);
   }
 
   // Guided add flow in progress?

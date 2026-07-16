@@ -69,7 +69,15 @@ Then message your bot `/start`.
 | `/whoami` | Your profile & private Telegram ID |
 | `/timezone` | Set your IANA timezone (needed for correct reminder + digest times) |
 | `/digest` | Set the digest hour (0–23) or turn it off |
+| `/watch` | Subscribe to a "what's new" digest for any topic (AI, crypto, sports, anything) |
+| `/topics` | Manage your topic watches — check now, or stop watching |
 | `/menu` `/help` | Menu / help |
+
+## Topic Watches ("what's new" digests)
+
+Pick any topic — a recommended shortlist (AI, Crypto, Tech News, ...) or type your own — and the bot checks the web every `WATCH_INTERVAL_DAYS` (default 7) for genuinely new developments, then sends a short AI-summarized digest. Each subscription also has a **Check now** button for an on-demand pull instead of waiting for the schedule.
+
+Requires a free [Tavily](https://tavily.com) API key (`TAVILY_API_KEY` in `.env`) for the web search step — without it, subscriptions still save but digests won't send until the key is added and the bot restarted. Search results are treated as untrusted external content: the summarizer is explicitly instructed to extract facts only and never follow instructions embedded in a scraped page (the same prompt-injection guardrail pattern as the quick-add parser).
 
 ## Weekly Update
 
