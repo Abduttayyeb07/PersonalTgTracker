@@ -5,7 +5,7 @@ import type { Category } from "./db/schema.js";
 // button (defaults to the board overview).
 export function taskActions(taskId: number, back = "board"): InlineKeyboard {
   return new InlineKeyboard()
-    .text("✅ Done", `done:${taskId}`)
+    .text("✅ Mark Done", `done:${taskId}`)
     .text("⏰ Snooze", `snooze:${taskId}`)
     .row()
     .text("✏️ Edit", `edit:${taskId}`)
