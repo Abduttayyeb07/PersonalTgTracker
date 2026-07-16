@@ -1,25 +1,33 @@
 import { config } from "../config.js";
 import { searchTopic } from "./search.js";
 import { generateTopicUpdate } from "./bedrock.js";
+import { buildTopicPdf } from "./topicPdf.js";
+
+export type TopicDigestOutcome =
+  | { type: "not_configured" }
+  | { type: "no_results" }
+  | { type: "pdf"; buffer: Buffer };
 
 /**
- * Builds a "what's new" digest for a watched topic: search + AI summary.
- * Returns null only when search isn't configured at all (caller should show
- * a distinct "not set up" message in that case, not a generic failure).
+ * Builds a "what's new" digest for a watched topic: search, AI summary, then
+ * a short PDF (summary bullets + real source links). Telegram chat messages
+ * aren't a good fit for this — a PDF keeps it skimmable and out of the chat's
+ * character limits, with sources the user can actually click through to.
  */
-export async function buildTopicDigest(topic: string): Promise<string | null> {
-  if (!config.tavily.enabled) return null;
+export async function buildTopicDigest(topic: string): Promise<TopicDigestOutcome> {
+  if (!config.tavily.enabled) return { type: "not_configured" };
 
   const results = await searchTopic(topic, config.watchIntervalDays);
-  if (results.length === 0) {
-    return `What's new: ${topic}\n\nNo fresh updates found this time.`;
+  if (results.length === 0) return { type: "no_results" };
+
+  let summary: string;
+  try {
+    summary = await generateTopicUpdate(topic, results);
+  } catch (err) {
+    console.warn(`Topic summary generation failed for "${topic}":`, (err as Error).message);
+    summary = results.map((r) => r.title).join("\n");
   }
 
-  try {
-    return await generateTopicUpdate(topic, results);
-  } catch (err) {
-    console.warn(`Topic digest generation failed for "${topic}":`, (err as Error).message);
-    const lines = results.slice(0, 6).map((r) => `• ${r.title}`).join("\n");
-    return `What's new: ${topic}\n\n${lines}`;
-  }
+  const buffer = await buildTopicPdf(topic, summary, results);
+  return { type: "pdf", buffer };
 }

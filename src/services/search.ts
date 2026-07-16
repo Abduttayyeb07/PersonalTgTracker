@@ -11,6 +11,10 @@ export interface SearchResult {
  * short list of {title, url, content} snippets, or an empty array on any
  * failure (caller should treat that as "nothing new to report" rather than
  * erroring out to the user).
+ *
+ * Deliberately cheap: "basic" search depth (Tavily bills "advanced" at a
+ * higher credit cost) and a small max_results, since this runs on a fixed
+ * schedule per topic and the free tier is a shared budget across all topics.
  */
 export async function searchTopic(topic: string, days: number): Promise<SearchResult[]> {
   if (!config.tavily.enabled) return [];
@@ -24,7 +28,8 @@ export async function searchTopic(topic: string, days: number): Promise<SearchRe
         query: `latest news and developments in ${topic}`,
         topic: "news",
         days,
-        max_results: 8,
+        search_depth: "basic",
+        max_results: 5,
         include_answer: false,
       }),
     });
@@ -40,7 +45,7 @@ export async function searchTopic(topic: string, days: number): Promise<SearchRe
       .map((r) => ({
         title: r.title as string,
         url: r.url ?? "",
-        content: (r.content as string).slice(0, 1200),
+        content: (r.content as string).slice(0, 600),
       }));
   } catch (err) {
     console.warn(`Tavily search errored for topic "${topic}":`, (err as Error).message);

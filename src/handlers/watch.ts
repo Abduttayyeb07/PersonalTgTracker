@@ -1,4 +1,4 @@
-import { InlineKeyboard } from "grammy";
+import { InlineKeyboard, InputFile } from "grammy";
 import { DateTime } from "luxon";
 import type { BotContext } from "../types.js";
 import type { User } from "../db/schema.js";
@@ -123,9 +123,27 @@ export async function checkWatchNow(ctx: BotContext, user: User, id: number): Pr
   }
 
   await ctx.reply(`🔎 Checking what's new in <b>${watch.topic}</b>…`, { parse_mode: "HTML" });
-  const digest = await buildTopicDigest(watch.topic);
+  const outcome = await buildTopicDigest(watch.topic);
+
+  if (outcome.type === "not_configured") {
+    await ctx.reply("⚠️ Web search isn't configured yet — ask whoever runs the bot to add TAVILY_API_KEY.", {
+      reply_markup: watchItemActions(id),
+    });
+    return;
+  }
+  if (outcome.type === "no_results") {
+    await markTopicWatchSent(id);
+    await ctx.reply(`Nothing fresh to report on <b>${watch.topic}</b> this time.`, {
+      parse_mode: "HTML",
+      reply_markup: watchItemActions(id),
+    });
+    return;
+  }
+
   await markTopicWatchSent(id);
-  await ctx.reply(digest ?? "Couldn't fetch anything this time — try again shortly.", {
+  await ctx.replyWithDocument(new InputFile(outcome.buffer, "whats-new.pdf"), {
+    caption: `🔎 What's new: <b>${watch.topic}</b>`,
+    parse_mode: "HTML",
     reply_markup: watchItemActions(id),
   });
 }

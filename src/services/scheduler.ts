@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import { Bot, InlineKeyboard } from "grammy";
+import { Bot, InlineKeyboard, InputFile } from "grammy";
 import type { BotContext } from "../types.js";
 import { config } from "../config.js";
 import {
@@ -205,9 +205,22 @@ async function runTopicWatches(bot: Bot<BotContext>): Promise<void> {
     if (!user) continue;
 
     try {
-      const digest = await buildTopicDigest(watch.topic);
-      if (digest === null) continue; // search not configured yet — retry next tick, don't mark sent
-      await bot.api.sendMessage(user.chatId, digest, { reply_markup: watchItemActions(watch.id) });
+      const outcome = await buildTopicDigest(watch.topic);
+      if (outcome.type === "not_configured") continue; // retry next tick, don't mark sent
+
+      if (outcome.type === "no_results") {
+        await bot.api.sendMessage(
+          user.chatId,
+          `🔎 <b>${watch.topic}</b>: nothing fresh to report this week.`,
+          { parse_mode: "HTML", reply_markup: watchItemActions(watch.id) }
+        );
+      } else {
+        await bot.api.sendDocument(user.chatId, new InputFile(outcome.buffer, "whats-new.pdf"), {
+          caption: `🔎 What's new: <b>${watch.topic}</b>`,
+          parse_mode: "HTML",
+          reply_markup: watchItemActions(watch.id),
+        });
+      }
       await markTopicWatchSent(watch.id);
     } catch (err) {
       console.error(`Topic watch failed for "${watch.topic}" (user ${watch.userId}):`, err);
