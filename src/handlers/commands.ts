@@ -11,7 +11,7 @@ import {
 } from "../services/store.js";
 import { parseQuickAdd } from "../services/parser.js";
 import { tryNaturalLanguageEdit } from "../services/nlEdit.js";
-import { handleMarkDone, renderBoard, renderCard, renderList } from "./render.js";
+import { handleMarkDone, renderBoard, renderCard, renderList, renderTotal } from "./render.js";
 import { homeRow, mainMenu, taskActions, timezonePicker } from "../keyboards.js";
 import { localTimeIn, resolveTimezone } from "../utils/timezone.js";
 import { taskCard } from "../utils/format.js";
@@ -108,6 +108,11 @@ commands.command("menu", async (ctx) => {
 commands.command("board", async (ctx) => {
   const user = await ensureUser(ctx.from!.id, ctx.chat!.id, ctx.from!.first_name);
   await renderBoard(ctx, user);
+});
+
+commands.command("total", async (ctx) => {
+  const user = await ensureUser(ctx.from!.id, ctx.chat!.id, ctx.from!.first_name);
+  await renderTotal(ctx, user);
 });
 
 commands.command("log", async (ctx) => {

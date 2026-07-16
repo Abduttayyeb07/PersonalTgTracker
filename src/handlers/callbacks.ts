@@ -1,6 +1,7 @@
-import { Composer, InlineKeyboard } from "grammy";
+import { Composer, InlineKeyboard, InputFile } from "grammy";
 import type { BotContext } from "../types.js";
 import {
+  boardTasks,
   deleteTask,
   ensureUser,
   getTask,
@@ -9,7 +10,15 @@ import {
   updateTask,
   updateUser,
 } from "../services/store.js";
-import { handleMarkDone, handleUndoDone, renderBoard, renderCard, renderList } from "./render.js";
+import { buildTasksPdf } from "../services/pdf.js";
+import {
+  handleMarkDone,
+  handleUndoDone,
+  renderBoard,
+  renderCard,
+  renderList,
+  renderTotal,
+} from "./render.js";
 import {
   categoryPicker,
   datePicker,
@@ -48,6 +57,19 @@ callbacks.on("callback_query:data", async (ctx) => {
       case "board":
         await renderBoard(ctx, user, true);
         break;
+      case "total": {
+        if (rest[0] === "pdf") {
+          const [tasks, cats] = await Promise.all([boardTasks(user), listCategories(user.userId)]);
+          const catMap = new Map(cats.map((c) => [c.id, c]));
+          const pdf = await buildTasksPdf(user.name, tasks, catMap, user.timezone);
+          await ctx.replyWithDocument(new InputFile(pdf, "tasks.pdf"), {
+            caption: `📄 ${tasks.length} open task${tasks.length === 1 ? "" : "s"} — generated just now.`,
+          });
+        } else {
+          await renderTotal(ctx, user, true);
+        }
+        break;
+      }
       case "menu":
         await ctx
           .editMessageText(welcomeText(user.name, user.userId), {

@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, isNull, lt, lte, or, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, lt, lte, or, ne, sql } from "drizzle-orm";
 import { DateTime } from "luxon";
 import { db } from "../db/index.js";
 import { users, categories, tasks, weekEntries } from "../db/schema.js";
@@ -231,6 +231,24 @@ export async function boardTasks(user: User): Promise<Task[]> {
       ne(tasks.status, "cancelled")
     ),
     orderBy: [asc(tasks.priority), asc(tasks.dueAt)],
+  });
+}
+
+// Count of open (not done/cancelled) tasks, for the "Total" summary.
+export async function countOpenTasks(userId: number): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(tasks)
+    .where(and(eq(tasks.userId, userId), ne(tasks.status, "done"), ne(tasks.status, "cancelled")));
+  return row?.count ?? 0;
+}
+
+// Most recently created open tasks, for the "Total" summary's preview list.
+export async function recentOpenTasks(userId: number, limit: number): Promise<Task[]> {
+  return db.query.tasks.findMany({
+    where: and(eq(tasks.userId, userId), ne(tasks.status, "done"), ne(tasks.status, "cancelled")),
+    orderBy: [desc(tasks.createdAt)],
+    limit,
   });
 }
 

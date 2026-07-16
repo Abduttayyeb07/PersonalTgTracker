@@ -61,6 +61,7 @@ Then message your bot `/start`.
 | Command | What it does |
 |---|---|
 | `/board` | Priority board — tasks grouped into **Critical · Important · Normal · Low** |
+| `/total` | Total pending count + latest 5 tasks, with a **Get PDF** button exporting every open task |
 | `/add` | Guided add via buttons |
 | just type | Natural-language quick add |
 | `/today` `/week` `/all` `/overdue` | List views |

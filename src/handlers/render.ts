@@ -5,9 +5,11 @@ import {
   acknowledgeRecurringDone,
   boardTasks,
   completeTask,
+  countOpenTasks,
   getTask,
   listCategories,
   listTasks,
+  recentOpenTasks,
   uncompleteTask,
 } from "../services/store.js";
 import type { Category, Task, User } from "../db/schema.js";
@@ -123,6 +125,34 @@ export async function renderBoard(ctx: BotContext, user: User, edit = false): Pr
 
 function escapeTitle(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// "Total Tasks" summary: open-task count + the 5 most recently added, with a
+// button to export everything outstanding as a PDF.
+export async function renderTotal(ctx: BotContext, user: User, edit = false): Promise<void> {
+  const [total, recent, cats] = await Promise.all([
+    countOpenTasks(user.userId),
+    recentOpenTasks(user.userId, 5),
+    listCategories(user.userId),
+  ]);
+  const catMap = new Map(cats.map((c) => [c.id, c]));
+
+  const header = `📊 <b>Total Tasks</b>\n\nYou have <b>${total}</b> pending task${total === 1 ? "" : "s"}.`;
+  const body =
+    recent.length === 0
+      ? `${header}\n\n<i>Nothing pending — you're all caught up! ✨</i>`
+      : `${header}\n\n<b>Latest ${recent.length}:</b>\n<blockquote>${recent
+          .map((t) => taskLine(t, user.timezone, catMap.get(t.categoryId ?? -1)))
+          .join("\n")}</blockquote>`;
+
+  const kb = new InlineKeyboard()
+    .text("📄 Get PDF", "total:pdf")
+    .row()
+    .text("🗂 Board", "board:open")
+    .text("« Back", "menu:back");
+
+  if (edit) await ctx.editMessageText(body, { parse_mode: "HTML", reply_markup: kb }).catch(() => {});
+  else await ctx.reply(body, { parse_mode: "HTML", reply_markup: kb });
 }
 
 // Render a single task as a card with action buttons.

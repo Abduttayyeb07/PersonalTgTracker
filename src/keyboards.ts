@@ -131,7 +131,9 @@ export function mainMenu(): InlineKeyboard {
     .text("➕ Add task", "add:new")
     .text("📝 Weekly", "wk:list")
     .row()
+    .text("📊 Total", "total:open")
     .text("⚙️ Settings", "settings:open")
+    .row()
     .text("❓ Help", "help:open");
 }
 

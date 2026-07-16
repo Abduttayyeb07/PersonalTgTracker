@@ -26,6 +26,7 @@ export async function setCommands(bot: Bot<BotContext>): Promise<void> {
   await bot.api.setMyCommands([
     { command: "start", description: "Welcome & main menu" },
     { command: "board", description: "Priority board" },
+    { command: "total", description: "Total pending tasks + PDF export" },
     { command: "add", description: "Add a task (guided)" },
     { command: "cancel", description: "Cancel guided add / a pending prompt" },
     { command: "today", description: "Tasks due today" },
